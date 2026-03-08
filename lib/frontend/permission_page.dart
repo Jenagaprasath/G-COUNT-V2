@@ -68,9 +68,9 @@ class PermissionPage extends StatelessWidget {
                 Container(
                   width: 90,
                   height: 90,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF1A2E45),
+                    color: Color(0xFF1A2E45),
                   ),
                   child: const Icon(
                     Icons.mic,
@@ -117,7 +117,9 @@ class PermissionPage extends StatelessWidget {
                       height: 1.6,
                     ),
                     children: [
-                      TextSpan(text: 'This app will record your voice for your commands. Say '),
+                      TextSpan(
+                        text: 'This app will record your voice only for your commands. Say ',
+                      ),
                       TextSpan(
                         text: '"START"',
                         style: TextStyle(
@@ -125,7 +127,7 @@ class PermissionPage extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      TextSpan(text: ' to start the counting, say '),
+                      TextSpan(text: ' to start the counting, '),
                       TextSpan(
                         text: '"STOP"',
                         style: TextStyle(
@@ -133,7 +135,7 @@ class PermissionPage extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      TextSpan(text: ' to stop the counting, and say '),
+                      TextSpan(text: ' to stop counting, '),
                       TextSpan(
                         text: '"RESET"',
                         style: TextStyle(
@@ -141,7 +143,17 @@ class PermissionPage extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      TextSpan(text: ' to reset the counting.'),
+                      TextSpan(text: ' to reset counting and '),
+                      TextSpan(
+                        text: '"OK"',
+                        style: TextStyle(
+                          color: Color(0xFF2979FF),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' to stop limit alert !!! notification.',
+                      ),
                     ],
                   ),
                 ),
