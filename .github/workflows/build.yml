@@ -36,6 +36,10 @@ jobs:
           chmod +x android/gradlew
           rm -rf temp_project
 
+      - name: Fix Gradle version
+        run: |
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip" > android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Get dependencies
         run: flutter pub get
 
