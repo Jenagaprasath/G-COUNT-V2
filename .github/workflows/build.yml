@@ -1,0 +1,59 @@
+name: Build and Release G COUNT
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build APK and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Create Flutter project scaffold
+        run: |
+          flutter create --project-name g_count --org com.example temp_project
+          cp -r temp_project/android/gradlew android/gradlew
+          cp -r temp_project/android/gradlew.bat android/gradlew.bat
+          cp -r temp_project/android/gradle android/gradle
+          cp temp_project/android/local.properties android/local.properties
+          chmod +x android/gradlew
+          rm -rf temp_project
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "v${{ steps.version.outputs.VERSION }}"
+          name: "G COUNT v${{ steps.version.outputs.VERSION }}"
+          artifacts: "build/app/outputs/flutter-apk/app-release.apk"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ## G COUNT Release
+            - Auto-built from latest push to main
+            - Download APK below and install on Android
