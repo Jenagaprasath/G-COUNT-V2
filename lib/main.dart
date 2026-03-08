@@ -22,7 +22,6 @@ class GCountApp extends StatelessWidget {
           primary: Color(0xFF2979FF),
           surface: Color(0xFF0D1B2A),
         ),
-        fontFamily: 'sans-serif',
       ),
       initialRoute: '/',
       routes: {
