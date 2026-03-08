@@ -40,6 +40,30 @@ jobs:
         run: |
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip" > android/gradle/wrapper/gradle-wrapper.properties
 
+      - name: Replace empty icons with real icons
+        run: |
+          sudo apt-get install -y imagemagick
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          convert -size 72x72 xc:#2979FF -fill white -font DejaVu-Sans-Bold \
+            -pointsize 20 -gravity center -annotate 0 "G" \
+            android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert -size 48x48 xc:#2979FF -fill white -font DejaVu-Sans-Bold \
+            -pointsize 14 -gravity center -annotate 0 "G" \
+            android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert -size 96x96 xc:#2979FF -fill white -font DejaVu-Sans-Bold \
+            -pointsize 28 -gravity center -annotate 0 "G" \
+            android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert -size 144x144 xc:#2979FF -fill white -font DejaVu-Sans-Bold \
+            -pointsize 40 -gravity center -annotate 0 "G" \
+            android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert -size 192x192 xc:#2979FF -fill white -font DejaVu-Sans-Bold \
+            -pointsize 56 -gravity center -annotate 0 "G" \
+            android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
       - name: Get dependencies
         run: flutter pub get
 
