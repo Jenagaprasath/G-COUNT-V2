@@ -1,3 +1,4 @@
+import 'g_log.dart';
 import 'dart:async';
 import 'tts_service.dart';
 import 'limit_service.dart';
@@ -15,31 +16,34 @@ class CounterLogic {
   int get counter => _counter;
   bool get isRunning => _isRunning;
 
-  // Callbacks
   Function(int)? onCountChanged;
   Function()? onLimitReached;
 
   Future<void> init() async {
+    GLog.i('CounterLogic', 'Initializing TTS...');
     await _tts.init();
+    GLog.i('CounterLogic', 'TTS initialized');
   }
 
   Future<void> start() async {
-    if (_isRunning) return;
+    if (_isRunning) {
+      GLog.w('CounterLogic', 'Already running — ignoring start()');
+      return;
+    }
+    GLog.i('CounterLogic', 'Counter STARTED at $_counter');
     _isRunning = true;
 
-    // Speak current counter immediately on start
     await _tts.speak(_counter.toString());
 
     _timer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       _counter++;
+      GLog.d('CounterLogic', 'Counter tick → $_counter');
       onCountChanged?.call(_counter);
-
-      // Speak the number
       await _tts.speak(_counter.toString());
 
-      // Check limit
       if (_limitService.isLimitSet() &&
           _counter >= _limitService.getLimit()) {
+        GLog.i('CounterLogic', 'LIMIT REACHED at $_counter (limit: ${_limitService.getLimit()})');
         await stop();
         onLimitReached?.call();
         _startLimitAlert();
@@ -48,6 +52,7 @@ class CounterLogic {
   }
 
   Future<void> stop() async {
+    GLog.i('CounterLogic', 'Counter STOPPED at $_counter');
     _isRunning = false;
     _timer?.cancel();
     _timer = null;
@@ -55,20 +60,23 @@ class CounterLogic {
   }
 
   Future<void> reset() async {
+    GLog.i('CounterLogic', 'Counter RESET from $_counter to 0');
     await stop();
     stopLimitAlert();
     _counter = 0;
     onCountChanged?.call(_counter);
   }
 
-  // Start repeating "YOU HAVE REACHED" alert
   void _startLimitAlert() {
+    GLog.i('CounterLogic', 'Starting limit alert audio loop...');
     _isAlertActive = true;
     _speakAlert();
     _alertTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (_isAlertActive) {
+        GLog.d('CounterLogic', 'Alert repeating...');
         _speakAlert();
       } else {
+        GLog.i('CounterLogic', 'Alert stopped — cancelling timer');
         timer.cancel();
       }
     });
@@ -76,12 +84,13 @@ class CounterLogic {
 
   Future<void> _speakAlert() async {
     if (_isAlertActive) {
+      GLog.d('CounterLogic', 'Speaking alert: YOU HAVE REACHED!!!');
       await _tts.speak('YOU HAVE REACHED!!!');
     }
   }
 
-  // Call this when user clicks OK or RESET on the dialog
   void stopLimitAlert() {
+    GLog.i('CounterLogic', 'Stopping limit alert');
     _isAlertActive = false;
     _alertTimer?.cancel();
     _alertTimer = null;
@@ -89,18 +98,15 @@ class CounterLogic {
   }
 
   void setLimit(int limit) {
+    GLog.i('CounterLogic', 'Limit set to: $limit');
     _limitService.setLimit(limit);
   }
 
-  int getLimit() {
-    return _limitService.getLimit();
-  }
-
-  bool isLimitSet() {
-    return _limitService.isLimitSet();
-  }
+  int getLimit() => _limitService.getLimit();
+  bool isLimitSet() => _limitService.isLimitSet();
 
   void dispose() {
+    GLog.i('CounterLogic', 'Disposing CounterLogic');
     _timer?.cancel();
     _alertTimer?.cancel();
     _tts.dispose();

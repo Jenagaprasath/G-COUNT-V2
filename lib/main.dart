@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'backend/g_log.dart';
 import 'frontend/home_page.dart';
 import 'frontend/set_limit_page.dart';
 import 'frontend/permission_page.dart';
 
 void main() {
+  GLog.i('Main', '🚀 G COUNT App Starting...');
   runApp(const GCountApp());
 }
 
@@ -12,6 +14,7 @@ class GCountApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    GLog.i('Main', 'App widget built');
     return MaterialApp(
       title: 'G COUNT',
       debugShowCheckedModeBanner: false,
