@@ -7,8 +7,10 @@ class CounterLogic {
   final LimitService _limitService = LimitService();
 
   Timer? _timer;
+  Timer? _alertTimer;
   int _counter = 0;
   bool _isRunning = false;
+  bool _isAlertActive = false;
 
   int get counter => _counter;
   bool get isRunning => _isRunning;
@@ -40,6 +42,7 @@ class CounterLogic {
           _counter >= _limitService.getLimit()) {
         await stop();
         onLimitReached?.call();
+        _startLimitAlert();
       }
     });
   }
@@ -53,8 +56,36 @@ class CounterLogic {
 
   Future<void> reset() async {
     await stop();
+    stopLimitAlert();
     _counter = 0;
     onCountChanged?.call(_counter);
+  }
+
+  // Start repeating "YOU HAVE REACHED" alert
+  void _startLimitAlert() {
+    _isAlertActive = true;
+    _speakAlert();
+    _alertTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_isAlertActive) {
+        _speakAlert();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _speakAlert() async {
+    if (_isAlertActive) {
+      await _tts.speak('YOU HAVE REACHED!!!');
+    }
+  }
+
+  // Call this when user clicks OK or RESET on the dialog
+  void stopLimitAlert() {
+    _isAlertActive = false;
+    _alertTimer?.cancel();
+    _alertTimer = null;
+    _tts.stop();
   }
 
   void setLimit(int limit) {
@@ -71,6 +102,7 @@ class CounterLogic {
 
   void dispose() {
     _timer?.cancel();
+    _alertTimer?.cancel();
     _tts.dispose();
   }
 }

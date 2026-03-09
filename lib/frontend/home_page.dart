@@ -71,31 +71,41 @@ class _HomePageState extends State<HomePage> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Text(
-          '🎯 Limit Reached!',
+          '🎯 Limit Reached!!!',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
         ),
         content: Text(
-          'Counter has reached the limit of ${_counterLogic.getLimit()}.',
+          'Counter has reached the limit of ${_counterLogic.getLimit()}.\n\nYOU HAVE REACHED!!!',
           style: const TextStyle(
             color: Color(0xFF8A9BB0),
+            fontSize: 15,
+            height: 1.5,
           ),
         ),
         actions: [
+          // RESET BUTTON
           TextButton(
             onPressed: () async {
+              _counterLogic.stopLimitAlert();
               Navigator.pop(context);
               await _resetCounter();
             },
             child: const Text(
               'RESET',
-              style: TextStyle(color: Color(0xFF2979FF)),
+              style: TextStyle(
+                color: Color(0xFF2979FF),
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
+          // OK BUTTON
           TextButton(
             onPressed: () {
+              _counterLogic.stopLimitAlert();
               Navigator.pop(context);
             },
             child: const Text(
