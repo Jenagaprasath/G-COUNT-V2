@@ -7,11 +7,14 @@ class SttService {
   final SpeechToText _speech = SpeechToText();
   bool _isInitialized = false;
   bool _isListening = false;
+  bool _shouldKeepListening = false;
 
   bool get isListening => _isListening;
+  bool get shouldKeepListening => _shouldKeepListening;
 
   // Callback when command detected
   Function(VoiceCommand)? onCommandDetected;
+  Function(bool)? onListeningStateChanged;
 
   Future<bool> init() async {
     // Request microphone permission
@@ -20,13 +23,27 @@ class SttService {
       return false;
     }
 
+    if (_isInitialized) return true;
+
     _isInitialized = await _speech.initialize(
       onError: (error) {
-        _isListening = false;
+        // Auto restart on error if should keep listening
+        if (_shouldKeepListening) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _restartListening();
+          });
+        }
       },
       onStatus: (status) {
         if (status == 'done' || status == 'notListening') {
           _isListening = false;
+          onListeningStateChanged?.call(false);
+          // Auto restart if should keep listening
+          if (_shouldKeepListening) {
+            Future.delayed(const Duration(milliseconds: 300), () {
+              _restartListening();
+            });
+          }
         }
       },
     );
@@ -34,34 +51,61 @@ class SttService {
     return _isInitialized;
   }
 
-  Future<void> startListening() async {
-    if (!_isInitialized || _isListening) return;
+  // Start forever listening mode
+  Future<void> startForeverListening() async {
+    if (!_isInitialized) return;
+    _shouldKeepListening = true;
+    await _restartListening();
+  }
+
+  Future<void> _restartListening() async {
+    if (!_shouldKeepListening || _isListening) return;
 
     _isListening = true;
+    onListeningStateChanged?.call(true);
 
     await _speech.listen(
       onResult: (result) {
         if (result.finalResult) {
           final words = result.recognizedWords.toUpperCase().trim();
-          final command = _parseCommand(words);
-          if (command != VoiceCommand.unknown) {
-            onCommandDetected?.call(command);
+          if (words.isNotEmpty) {
+            final command = _parseCommand(words);
+            if (command != VoiceCommand.unknown) {
+              onCommandDetected?.call(command);
+            }
           }
-          // Audio is processed and discarded — never saved
-          stopListening();
+          // After result — restart listening immediately
+          _isListening = false;
+          if (_shouldKeepListening) {
+            Future.delayed(const Duration(milliseconds: 300), () {
+              _restartListening();
+            });
+          }
         }
       },
-      listenFor: const Duration(seconds: 5),
-      pauseFor: const Duration(seconds: 2),
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 5),
       partialResults: false,
-      cancelOnError: true,
+      cancelOnError: false,
       listenMode: ListenMode.confirmation,
     );
   }
 
-  void stopListening() {
+  // Stop forever listening — only called when user leaves app
+  void stopForeverListening() {
+    _shouldKeepListening = false;
     _isListening = false;
     _speech.stop();
+    onListeningStateChanged?.call(false);
+  }
+
+  // Legacy single listen — kept for compatibility
+  Future<void> startListening() async {
+    await startForeverListening();
+  }
+
+  void stopListening() {
+    stopForeverListening();
   }
 
   VoiceCommand _parseCommand(String words) {
@@ -75,6 +119,7 @@ class SttService {
   }
 
   void dispose() {
-    _speech.stop();
+    stopForeverListening();
+    _speech.cancel();
   }
 }

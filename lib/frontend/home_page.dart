@@ -19,6 +19,7 @@ class _HomePageState extends State<HomePage> {
   bool _isRunning = false;
   bool _isListening = false;
   bool _isLimitDialogOpen = false;
+  bool _voiceEnabled = false;
   int _counter = 0;
 
   @override
@@ -32,20 +33,30 @@ class _HomePageState extends State<HomePage> {
     await _counterLogic.init();
 
     _counterLogic.onCountChanged = (count) {
-      setState(() {
-        _counter = count;
-      });
+      if (mounted) {
+        setState(() {
+          _counter = count;
+        });
+      }
     };
 
     _counterLogic.onLimitReached = () {
-      setState(() {
-        _isRunning = false;
-      });
-      _showLimitDialog();
+      if (mounted) {
+        setState(() {
+          _isRunning = false;
+        });
+        _showLimitDialog();
+      }
     };
 
-    // Init voice
-    await _sttService.init();
+    // Init STT
+    _sttService.onListeningStateChanged = (listening) {
+      if (mounted) {
+        setState(() {
+          _isListening = listening;
+        });
+      }
+    };
 
     _sttService.onCommandDetected = (command) {
       _handleVoiceCommand(command);
@@ -63,36 +74,33 @@ class _HomePageState extends State<HomePage> {
       case VoiceCommand.reset:
         _resetCounter();
         if (_isLimitDialogOpen) {
-          Navigator.pop(context);
-          _isLimitDialogOpen = false;
           _counterLogic.stopLimitAlert();
+          _isLimitDialogOpen = false;
+          Navigator.pop(context);
         }
         break;
       case VoiceCommand.ok:
         if (_isLimitDialogOpen) {
-          Navigator.pop(context);
-          _isLimitDialogOpen = false;
           _counterLogic.stopLimitAlert();
+          _isLimitDialogOpen = false;
+          Navigator.pop(context);
         }
         break;
       case VoiceCommand.unknown:
         break;
     }
-
-    // Stop listening after command
-    setState(() {
-      _isListening = false;
-    });
   }
 
   Future<void> _toggleVoiceControl() async {
-    if (_isListening) {
-      _sttService.stopListening();
+    if (_voiceEnabled) {
+      // Turn OFF — only manual toggle turns it off
+      _sttService.stopForeverListening();
       setState(() {
+        _voiceEnabled = false;
         _isListening = false;
       });
     } else {
-      // Check if permission page needed
+      // Turn ON — stays on forever
       final granted = await _sttService.init();
       if (!granted) {
         if (mounted) {
@@ -102,17 +110,10 @@ class _HomePageState extends State<HomePage> {
       }
 
       setState(() {
-        _isListening = true;
+        _voiceEnabled = true;
       });
 
-      await _sttService.startListening();
-
-      // Auto reset after listening
-      if (mounted) {
-        setState(() {
-          _isListening = false;
-        });
-      }
+      await _sttService.startForeverListening();
     }
   }
 
@@ -132,10 +133,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _resetCounter() async {
     await _counterLogic.reset();
-    setState(() {
-      _counter = 0;
-      _isRunning = false;
-    });
+    if (mounted) {
+      setState(() {
+        _counter = 0;
+        _isRunning = false;
+      });
+    }
   }
 
   void _showLimitDialog() {
@@ -165,7 +168,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          // RESET BUTTON
           TextButton(
             onPressed: () async {
               _counterLogic.stopLimitAlert();
@@ -181,7 +183,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          // OK BUTTON
           TextButton(
             onPressed: () {
               _counterLogic.stopLimitAlert();
@@ -213,8 +214,9 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _counterLogic.dispose();
+    // Mic OFF when user leaves app
     _sttService.dispose();
+    _counterLogic.dispose();
     super.dispose();
   }
 
@@ -234,7 +236,6 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // BACK BUTTON
                   GestureDetector(
                     onTap: () {},
                     child: const Row(
@@ -257,7 +258,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
 
-                  // SET LIMIT BUTTON
+                  // SET LIMIT
                   GestureDetector(
                     onTap: _openSetLimit,
                     child: Row(
@@ -305,7 +306,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // START/STOP/RESET BUTTONS
+            // START / STOP / RESET
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: StartStopButton(
@@ -319,11 +320,22 @@ class _HomePageState extends State<HomePage> {
 
             // VOICE CONTROL BUTTON
             VoiceControlButton(
-              isListening: _isListening,
+              isListening: _isListening && _voiceEnabled,
               onTap: _toggleVoiceControl,
             ),
 
-            const SizedBox(height: 60),
+            // Voice status text
+            const SizedBox(height: 8),
+            if (_voiceEnabled)
+              Text(
+                _isListening ? '🎤 Listening for commands...' : '🔄 Restarting mic...',
+                style: const TextStyle(
+                  color: Color(0xFF2979FF),
+                  fontSize: 12,
+                ),
+              ),
+
+            const SizedBox(height: 40),
           ],
         ),
       ),
