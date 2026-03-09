@@ -2,7 +2,6 @@ import 'dart:async';
 import 'g_log.dart';
 import 'tts_service.dart';
 import 'limit_service.dart';
-import 'stt_service.dart';
 
 class CounterLogic {
   final TtsService _tts = TtsService();
@@ -24,12 +23,6 @@ class CounterLogic {
     GLog.i('CounterLogic', 'Initializing TTS...');
     await _tts.init();
     GLog.i('CounterLogic', 'TTS initialized');
-  }
-
-  // Link STT so TTS can mute/unmute it
-  void linkStt(SttService sttService) {
-    GLog.i('CounterLogic', 'STT linked to TTS');
-    _tts.sttService = sttService;
   }
 
   Future<void> start() async {

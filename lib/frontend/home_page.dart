@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../backend/counter_logic.dart';
-import '../backend/stt_service.dart';
 import '../backend/g_log.dart';
 import 'widgets/counter_display.dart';
 import 'widgets/start_stop_button.dart';
-import 'widgets/voice_control_button.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,12 +13,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final CounterLogic _counterLogic = CounterLogic();
-  final SttService _sttService = SttService();
-
   bool _isRunning = false;
-  bool _isListening = false;
   bool _isLimitDialogOpen = false;
-  bool _voiceEnabled = false;
   int _counter = 0;
 
   @override
@@ -31,12 +25,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _initServices() async {
     GLog.i('HomePage', 'Initializing services...');
-
-    // Init counter
     await _counterLogic.init();
-
-    // Link STT to TTS so they coordinate
-    _counterLogic.linkStt(_sttService);
 
     _counterLogic.onCountChanged = (count) {
       if (mounted) {
@@ -55,71 +44,7 @@ class _HomePageState extends State<HomePage> {
       }
     };
 
-    // Init STT callbacks
-    _sttService.onListeningStateChanged = (listening) {
-      if (mounted) {
-        setState(() {
-          _isListening = listening;
-        });
-      }
-    };
-
-    _sttService.onCommandDetected = (command) {
-      GLog.i('HomePage', 'Voice command received: ${command.name}');
-      _handleVoiceCommand(command);
-    };
-
     GLog.i('HomePage', 'Services initialized');
-  }
-
-  void _handleVoiceCommand(VoiceCommand command) {
-    switch (command) {
-      case VoiceCommand.start:
-        if (!_isRunning) _toggleCounter();
-        break;
-      case VoiceCommand.stop:
-        if (_isRunning) _toggleCounter();
-        break;
-      case VoiceCommand.reset:
-        _resetCounter();
-        if (_isLimitDialogOpen) {
-          _counterLogic.stopLimitAlert();
-          _isLimitDialogOpen = false;
-          Navigator.pop(context);
-        }
-        break;
-      case VoiceCommand.ok:
-        if (_isLimitDialogOpen) {
-          _counterLogic.stopLimitAlert();
-          _isLimitDialogOpen = false;
-          Navigator.pop(context);
-        }
-        break;
-      case VoiceCommand.unknown:
-        break;
-    }
-  }
-
-  Future<void> _toggleVoiceControl() async {
-    if (_voiceEnabled) {
-      GLog.i('HomePage', 'Voice control turned OFF by user');
-      _sttService.stopForeverListening();
-      setState(() {
-        _voiceEnabled = false;
-        _isListening = false;
-      });
-    } else {
-      GLog.i('HomePage', 'Voice control turned ON by user');
-      final granted = await _sttService.init();
-      if (!granted) {
-        if (mounted) Navigator.pushNamed(context, '/permission');
-        return;
-      }
-      setState(() {
-        _voiceEnabled = true;
-      });
-      await _sttService.startForeverListening();
-    }
   }
 
   Future<void> _toggleCounter() async {
@@ -161,7 +86,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         content: Text(
-          'Counter reached ${_counterLogic.getLimit()}.\n\nSay "OK" or "RESET" to dismiss.',
+          'Counter reached ${_counterLogic.getLimit()}.',
           style: const TextStyle(
             color: Color(0xFF8A9BB0),
             fontSize: 15,
@@ -213,8 +138,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    GLog.i('HomePage', 'Disposing — MIC OFF');
-    _sttService.dispose();
+    GLog.i('HomePage', 'Disposing HomePage');
     _counterLogic.dispose();
     super.dispose();
   }
@@ -228,37 +152,41 @@ class _HomePageState extends State<HomePage> {
           children: [
             // TOP BAR
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 16,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
-                    onTap: () {},
-                    child: const Row(
-                      children: [
-                        Icon(Icons.chevron_left,
-                            color: Color(0xFF8A9BB0), size: 28),
-                        Text('BACK',
-                            style: TextStyle(
-                              color: Color(0xFF8A9BB0),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 1.2,
-                            )),
-                      ],
-                    ),
+                  const Row(
+                    children: [
+                      Icon(Icons.chevron_left,
+                          color: Color(0xFF8A9BB0), size: 28),
+                      Text(
+                        'BACK',
+                        style: TextStyle(
+                          color: Color(0xFF8A9BB0),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
                   ),
                   GestureDetector(
                     onTap: _openSetLimit,
                     child: Row(
                       children: [
-                        const Text('SET LIMIT',
-                            style: TextStyle(
-                              color: Color(0xFF2979FF),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                            )),
+                        const Text(
+                          'SET LIMIT',
+                          style: TextStyle(
+                            color: Color(0xFF2979FF),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                         if (_counterLogic.isLimitSet())
                           Container(
                             margin: const EdgeInsets.only(left: 8),
@@ -284,12 +212,12 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // COUNTER
+            // COUNTER DISPLAY
             Expanded(
               child: Center(child: CounterDisplay(counter: _counter)),
             ),
 
-            // BUTTONS
+            // START / STOP / RESET
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: StartStopButton(
@@ -299,25 +227,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            const SizedBox(height: 40),
-
-            // VOICE CONTROL
-            VoiceControlButton(
-              isListening: _isListening && _voiceEnabled,
-              onTap: _toggleVoiceControl,
-            ),
-
-            const SizedBox(height: 8),
-            if (_voiceEnabled)
-              Text(
-                _isListening ? '🎤 Listening...' : '🔄 Resuming mic...',
-                style: const TextStyle(
-                  color: Color(0xFF2979FF),
-                  fontSize: 12,
-                ),
-              ),
-
-            const SizedBox(height: 40),
+            const SizedBox(height: 80),
           ],
         ),
       ),
