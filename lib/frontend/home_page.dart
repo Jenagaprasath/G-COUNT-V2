@@ -53,6 +53,14 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _resetCounter() async {
+    await _counterLogic.reset();
+    setState(() {
+      _counter = 0;
+      _isRunning = false;
+    });
+  }
+
   void _showLimitDialog() {
     showDialog(
       context: context,
@@ -79,11 +87,7 @@ class _HomePageState extends State<HomePage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await _counterLogic.reset();
-              setState(() {
-                _counter = 0;
-                _isRunning = false;
-              });
+              await _resetCounter();
             },
             child: const Text(
               'RESET',
@@ -111,6 +115,7 @@ class _HomePageState extends State<HomePage> {
     final result = await Navigator.pushNamed(context, '/set-limit');
     if (result != null && result is int) {
       _counterLogic.setLimit(result);
+      setState(() {});
     }
   }
 
@@ -173,7 +178,6 @@ class _HomePageState extends State<HomePage> {
                             letterSpacing: 1.2,
                           ),
                         ),
-                        // Show limit value if set
                         if (_counterLogic.isLimitSet())
                           Container(
                             margin: const EdgeInsets.only(left: 8),
@@ -208,12 +212,13 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // START/STOP BUTTON
+            // START/STOP/RESET BUTTONS
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: StartStopButton(
                 isRunning: _isRunning,
                 onTap: _toggleCounter,
+                onReset: _resetCounter,
               ),
             ),
 
