@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../backend/counter_logic.dart';
+import '../backend/stt_service.dart';
 import 'widgets/counter_display.dart';
 import 'widgets/start_stop_button.dart';
 import 'widgets/voice_control_button.dart';
@@ -13,16 +14,21 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final CounterLogic _counterLogic = CounterLogic();
+  final SttService _sttService = SttService();
+
   bool _isRunning = false;
+  bool _isListening = false;
+  bool _isLimitDialogOpen = false;
   int _counter = 0;
 
   @override
   void initState() {
     super.initState();
-    _initCounter();
+    _initServices();
   }
 
-  Future<void> _initCounter() async {
+  Future<void> _initServices() async {
+    // Init counter
     await _counterLogic.init();
 
     _counterLogic.onCountChanged = (count) {
@@ -37,6 +43,77 @@ class _HomePageState extends State<HomePage> {
       });
       _showLimitDialog();
     };
+
+    // Init voice
+    await _sttService.init();
+
+    _sttService.onCommandDetected = (command) {
+      _handleVoiceCommand(command);
+    };
+  }
+
+  void _handleVoiceCommand(VoiceCommand command) {
+    switch (command) {
+      case VoiceCommand.start:
+        if (!_isRunning) _toggleCounter();
+        break;
+      case VoiceCommand.stop:
+        if (_isRunning) _toggleCounter();
+        break;
+      case VoiceCommand.reset:
+        _resetCounter();
+        if (_isLimitDialogOpen) {
+          Navigator.pop(context);
+          _isLimitDialogOpen = false;
+          _counterLogic.stopLimitAlert();
+        }
+        break;
+      case VoiceCommand.ok:
+        if (_isLimitDialogOpen) {
+          Navigator.pop(context);
+          _isLimitDialogOpen = false;
+          _counterLogic.stopLimitAlert();
+        }
+        break;
+      case VoiceCommand.unknown:
+        break;
+    }
+
+    // Stop listening after command
+    setState(() {
+      _isListening = false;
+    });
+  }
+
+  Future<void> _toggleVoiceControl() async {
+    if (_isListening) {
+      _sttService.stopListening();
+      setState(() {
+        _isListening = false;
+      });
+    } else {
+      // Check if permission page needed
+      final granted = await _sttService.init();
+      if (!granted) {
+        if (mounted) {
+          Navigator.pushNamed(context, '/permission');
+        }
+        return;
+      }
+
+      setState(() {
+        _isListening = true;
+      });
+
+      await _sttService.startListening();
+
+      // Auto reset after listening
+      if (mounted) {
+        setState(() {
+          _isListening = false;
+        });
+      }
+    }
   }
 
   Future<void> _toggleCounter() async {
@@ -62,6 +139,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showLimitDialog() {
+    _isLimitDialogOpen = true;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -79,7 +157,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         content: Text(
-          'Counter has reached the limit of ${_counterLogic.getLimit()}.\n\nYOU HAVE REACHED!!!',
+          'Counter has reached the limit of ${_counterLogic.getLimit()}.\n\nSay "OK" or "RESET" to dismiss.',
           style: const TextStyle(
             color: Color(0xFF8A9BB0),
             fontSize: 15,
@@ -91,6 +169,7 @@ class _HomePageState extends State<HomePage> {
           TextButton(
             onPressed: () async {
               _counterLogic.stopLimitAlert();
+              _isLimitDialogOpen = false;
               Navigator.pop(context);
               await _resetCounter();
             },
@@ -106,6 +185,7 @@ class _HomePageState extends State<HomePage> {
           TextButton(
             onPressed: () {
               _counterLogic.stopLimitAlert();
+              _isLimitDialogOpen = false;
               Navigator.pop(context);
             },
             child: const Text(
@@ -118,7 +198,9 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      _isLimitDialogOpen = false;
+    });
   }
 
   Future<void> _openSetLimit() async {
@@ -132,6 +214,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _counterLogic.dispose();
+    _sttService.dispose();
     super.dispose();
   }
 
@@ -236,9 +319,8 @@ class _HomePageState extends State<HomePage> {
 
             // VOICE CONTROL BUTTON
             VoiceControlButton(
-              onTap: () {
-                Navigator.pushNamed(context, '/permission');
-              },
+              isListening: _isListening,
+              onTap: _toggleVoiceControl,
             ),
 
             const SizedBox(height: 60),
