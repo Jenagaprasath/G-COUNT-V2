@@ -1,6 +1,6 @@
-import 'g_log.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'g_log.dart';
 
 enum VoiceCommand { start, stop, reset, ok, unknown }
 
@@ -9,8 +9,9 @@ class SttService {
   bool _isInitialized = false;
   bool _isListening = false;
   bool _shouldKeepListening = false;
+  bool _isMuted = false; // muted while TTS is speaking
 
-  bool get isListening => _isListening;
+  bool get isListening => _isListening && !_isMuted;
   bool get shouldKeepListening => _shouldKeepListening;
 
   Function(VoiceCommand)? onCommandDetected;
@@ -33,10 +34,15 @@ class SttService {
     _isInitialized = await _speech.initialize(
       onError: (error) {
         GLog.e('SttService', 'STT Error: ${error.errorMsg} | permanent: ${error.permanent}');
-        if (_shouldKeepListening) {
-          GLog.i('SttService', 'Auto-restarting after error...');
-          Future.delayed(const Duration(milliseconds: 500), () {
-            _restartListening();
+        _isListening = false;
+
+        // Only restart if not muted and should keep listening
+        if (_shouldKeepListening && !_isMuted) {
+          final delay = error.errorMsg == 'error_busy'
+              ? const Duration(milliseconds: 800)
+              : const Duration(milliseconds: 400);
+          Future.delayed(delay, () {
+            if (!_isMuted) _restartListening();
           });
         }
       },
@@ -45,10 +51,11 @@ class SttService {
         if (status == 'done' || status == 'notListening') {
           _isListening = false;
           onListeningStateChanged?.call(false);
-          if (_shouldKeepListening) {
-            GLog.i('SttService', 'Auto-restarting after status: $status');
-            Future.delayed(const Duration(milliseconds: 300), () {
-              _restartListening();
+
+          // Only restart if not muted
+          if (_shouldKeepListening && !_isMuted) {
+            Future.delayed(const Duration(milliseconds: 400), () {
+              if (!_isMuted) _restartListening();
             });
           }
         }
@@ -59,6 +66,28 @@ class SttService {
     return _isInitialized;
   }
 
+  // Called by TTS before speaking — pause STT
+  void muteWhileSpeaking() {
+    if (!_shouldKeepListening) return;
+    GLog.d('SttService', 'MUTED — TTS speaking, STT paused');
+    _isMuted = true;
+    if (_isListening) {
+      _speech.stop();
+      _isListening = false;
+      onListeningStateChanged?.call(false);
+    }
+  }
+
+  // Called by TTS after speaking — resume STT
+  void unmuteAfterSpeaking() {
+    if (!_shouldKeepListening) return;
+    GLog.d('SttService', 'UNMUTED — TTS done, STT resuming');
+    _isMuted = false;
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!_isMuted) _restartListening();
+    });
+  }
+
   Future<void> startForeverListening() async {
     if (!_isInitialized) {
       GLog.e('SttService', 'Cannot start — not initialized');
@@ -66,12 +95,14 @@ class SttService {
     }
     GLog.i('SttService', 'Starting FOREVER listening mode...');
     _shouldKeepListening = true;
+    _isMuted = false;
     await _restartListening();
   }
 
   Future<void> _restartListening() async {
-    if (!_shouldKeepListening || _isListening) {
-      GLog.d('SttService', 'Skip restart — shouldKeep:$_shouldKeepListening isListening:$_isListening');
+    if (!_shouldKeepListening || _isListening || _isMuted) {
+      GLog.d('SttService',
+          'Skip restart — shouldKeep:$_shouldKeepListening isListening:$_isListening isMuted:$_isMuted');
       return;
     }
 
@@ -81,10 +112,10 @@ class SttService {
 
     await _speech.listen(
       onResult: (result) {
-        GLog.d('SttService', 'Result received — final:${result.finalResult} words:"${result.recognizedWords}"');
         if (result.finalResult) {
           final words = result.recognizedWords.toUpperCase().trim();
           GLog.i('SttService', 'Final words detected: "$words"');
+
           if (words.isNotEmpty) {
             final command = _parseCommand(words);
             GLog.i('SttService', 'Command parsed: ${command.name}');
@@ -94,17 +125,17 @@ class SttService {
               GLog.w('SttService', 'Unknown command: "$words"');
             }
           }
+
           _isListening = false;
-          if (_shouldKeepListening) {
-            GLog.i('SttService', 'Restarting mic after command...');
+          if (_shouldKeepListening && !_isMuted) {
             Future.delayed(const Duration(milliseconds: 300), () {
-              _restartListening();
+              if (!_isMuted) _restartListening();
             });
           }
         }
       },
       listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 5),
+      pauseFor: const Duration(seconds: 8),
       partialResults: false,
       cancelOnError: false,
       listenMode: ListenMode.confirmation,
@@ -114,18 +145,13 @@ class SttService {
   void stopForeverListening() {
     GLog.i('SttService', 'Stopping forever listening...');
     _shouldKeepListening = false;
+    _isMuted = false;
     _isListening = false;
     _speech.stop();
     onListeningStateChanged?.call(false);
   }
 
-  Future<void> startListening() async {
-    await startForeverListening();
-  }
-
-  void stopListening() {
-    stopForeverListening();
-  }
+  void stopListening() => stopForeverListening();
 
   VoiceCommand _parseCommand(String words) {
     if (words.contains('START')) return VoiceCommand.start;

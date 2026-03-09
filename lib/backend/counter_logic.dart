@@ -1,7 +1,8 @@
-import 'g_log.dart';
 import 'dart:async';
+import 'g_log.dart';
 import 'tts_service.dart';
 import 'limit_service.dart';
+import 'stt_service.dart';
 
 class CounterLogic {
   final TtsService _tts = TtsService();
@@ -25,6 +26,12 @@ class CounterLogic {
     GLog.i('CounterLogic', 'TTS initialized');
   }
 
+  // Link STT so TTS can mute/unmute it
+  void linkStt(SttService sttService) {
+    GLog.i('CounterLogic', 'STT linked to TTS');
+    _tts.sttService = sttService;
+  }
+
   Future<void> start() async {
     if (_isRunning) {
       GLog.w('CounterLogic', 'Already running — ignoring start()');
@@ -43,7 +50,8 @@ class CounterLogic {
 
       if (_limitService.isLimitSet() &&
           _counter >= _limitService.getLimit()) {
-        GLog.i('CounterLogic', 'LIMIT REACHED at $_counter (limit: ${_limitService.getLimit()})');
+        GLog.i('CounterLogic',
+            'LIMIT REACHED at $_counter (limit: ${_limitService.getLimit()})');
         await stop();
         onLimitReached?.call();
         _startLimitAlert();
